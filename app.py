@@ -38,8 +38,7 @@ def process_match_results(df):
                     rounds_won_list.append(max_score)
                     rounds_lost_list.append(max_score)
                 else:
-                    if winning_team := team if team_kills.empty else team_kills.idxmax():
-                        pass
+                    winning_team = team if team_kills.empty else team_kills.idxmax()
                         
                     if team == winning_team:
                         result_list.append('Win')
@@ -82,24 +81,41 @@ else:
     # Run win/loss/round calculation engine
     df = process_match_results(df)
 
+    # Calculate Total Rounds played inside each individual match row
+    df['Match Rounds'] = df['Rounds Won'] + df['Rounds Lost']
+    # Safely replace any 0 round glitches with NaN to prevent division by zero errors
+    df['Match Rounds'] = df['Match Rounds'].replace(0, pd.NA)
+
+    # Generate Per-Round Metrics for each match entry row
+    df['Kills_per_round'] = df['K'] / df['Match Rounds']
+    df['Deaths_per_round'] = df['D'] / df['Match Rounds']
+    df['Assists_per_round'] = df['A'] / df['Match Rounds']
+    df['Open_kills_per_round'] = df['Open kills'] / df['Match Rounds']
+    df['Trade_kills_per_round'] = df['Trade kills'] / df['Match Rounds']
+
     # 1. DATA AGGREGATION
     base_metrics = df.groupby('Player').agg({
         'Match ID': 'count',
         'KAST, %': ['mean', 'std'],
         'ADR': ['mean', 'std'],
+        'Kills_per_round': ['mean', 'std'],
+        'Open_kills_per_round': ['mean', 'std'],
+        'Deaths_per_round': ['mean', 'std'],
         'ADR Differ...': ['mean', 'std'],
-        'K': ['sum', 'mean', 'std'],
-        'Open kills': ['sum', 'mean', 'std'],
-        'D': ['sum', 'mean', 'std'],
-        'A': ['sum', 'mean', 'std'],
-        'Damage': ['sum', 'mean', 'std'],
-        'Trade kills': ['sum', 'mean', 'std'],
-        'Rounds Won': ['sum', 'mean', 'std'],
-        'Rounds Lost': ['sum', 'mean', 'std'],
+        'Assists_per_round': ['mean', 'std'],
+        'Trade_kills_per_round': ['mean', 'std'],
+        'K': ['sum'],
+        'D': ['sum'],
+        'A': ['sum'],
+        'Damage': ['sum'],
+        'Open kills': ['sum'],
+        'Trade kills': ['sum'],
+        'Rounds Won': ['sum', 'mean'],
+        'Rounds Lost': ['sum', 'mean'],
         'HLTV Rating 2.1': ['mean', 'std']
     })
     
-    # Flatten names cleanly
+    # Flatten multi-index columns cleanly
     base_metrics.columns = ['_'.join(col).strip() for col in base_metrics.columns.values]
     leaderboard = base_metrics.reset_index()
     
@@ -119,7 +135,7 @@ else:
     leaderboard['Round Win Rate %'] = ((leaderboard['Rounds Won_sum'] / leaderboard['Total Rounds Played']) * 100).round(1)
     leaderboard['K/D Ratio'] = (leaderboard['K_sum'] / leaderboard['D_sum']).round(2)
 
-    # Map internally to structured display columns
+    # Map internally to cleanly named layout columns
     final_column_mapping = {
         'Player': 'Player',
         'Match ID_count': 'Matches Played',
@@ -133,94 +149,93 @@ else:
         'Round Win Rate %': 'Round Win Rate %',
         'KAST, %_mean': 'Avg KAST %',
         'ADR_mean': 'Avg ADR',
+        'Kills_per_round_mean': 'Kills per Round',
+        'Open_kills_per_round_mean': 'Open Kills per Round',
+        'Deaths_per_round_mean': 'Deaths per Round',
         'ADR Differ..._mean': 'Avg ADR Diff',
-        'K_mean': 'Avg Kills',
+        'Assists_per_round_mean': 'Assists per Round',
+        'Trade_kills_per_round_mean': 'Trade Kills per Round',
         'K_sum': 'Total Kills',
-        'Open kills_mean': 'Avg Open Kills',
-        'Open kills_sum': 'Total Open Kills',
-        'D_mean': 'Avg Deaths',
         'D_sum': 'Total Deaths',
-        'Damage_mean': 'Avg Damage',
-        'Damage_sum': 'Total Damage',
-        'A_mean': 'Avg Assists',
         'A_sum': 'Total Assists',
-        'Trade kills_mean': 'Avg Trade Kills',
+        'Damage_sum': 'Total Damage',
+        'Open kills_sum': 'Total Open Kills',
         'Trade kills_sum': 'Total Trade Kills',
-        'Rounds Won_mean': 'Avg Rounds Won',
-        'Rounds Lost_mean': 'Avg Rounds Lost',
+        'Rounds Won_mean': 'Avg Rounds Won/Match',
+        'Rounds Lost_mean': 'Avg Rounds Lost/Match',
         'HLTV Rating 2.1_mean': 'Avg Rating',
         # Standard deviations mapped behind the scenes for error bars
         'KAST, %_std': 'Std KAST %',
         'ADR_std': 'Std ADR',
+        'Kills_per_round_std': 'Std Kills per Round',
+        'Open_kills_per_round_std': 'Std Open Kills per Round',
+        'Deaths_per_round_std': 'Std Deaths per Round',
         'ADR Differ..._std': 'Std ADR Diff',
-        'K_std': 'Std Kills',
-        'Open kills_std': 'Std Open Kills',
-        'D_std': 'Std Deaths',
-        'A_std': 'Std Assists',
-        'Damage_std': 'Std Damage',
-        'Trade kills_std': 'Std Trade Kills',
-        'Rounds Won_std': 'Std Rounds Won',
-        'Rounds Lost_std': 'Std Rounds Lost',
+        'Assists_per_round_std': 'Std Assists per Round',
+        'Trade_kills_per_round_std': 'Std Trade Kills per Round',
         'HLTV Rating 2.1_std': 'Std Rating'
     }
     
     leaderboard = leaderboard.rename(columns=final_column_mapping)
 
-    # Standardize rounding formatting
-    for col in ['Avg KAST %', 'Avg ADR', 'Avg ADR Diff', 'Avg Kills', 'Avg Open Kills', 'Avg Deaths', 'Avg Assists', 'Avg Trade Kills', 'Avg Rounds Won', 'Avg Rounds Lost', 'Avg Rating']:
-        leaderboard[col] = leaderboard[col].round(1) if col != 'Avg Rating' else leaderboard[col].round(2)
-    leaderboard['Avg Damage'] = leaderboard['Avg Damage'].round(0)
+    # Standardize precision rounding formatting across fields
+    precision_1_cols = [
+        'Avg KAST %', 'Avg ADR', 'Avg ADR Diff', 'Round Win Rate %',
+        'Kills per Round', 'Open Kills per Round', 'Deaths per Round', 
+        'Assists per Round', 'Trade Kills per Round', 'Win Rate %'
+    ]
+    for col in precision_1_cols:
+        leaderboard[col] = leaderboard[col].round(1)
+    leaderboard['Avg Rating'] = leaderboard['Avg Rating'].round(2)
 
     # Sort master table precisely by your specified core performance weights
-    leaderboard = leaderboard.sort_values(by=['Avg KAST %', 'Avg ADR', 'Avg Kills'], ascending=[False, False, False])
+    leaderboard = leaderboard.sort_values(by=['Avg KAST %', 'Avg ADR', 'Kills per Round'], ascending=[False, False, False])
 
     # Display Master Metrics Data Grid Matrix
     st.subheader("📋 Complete Master Analytics Grid")
     st.write("Scroll horizontally to examine all metrics simultaneously.")
     
-    # Custom exact requested structured table index alignment ordering logic
     table_display_order = [
         'Player', 'Matches Played', 'Games Won', 'Games Lost', 'Games Drawn', 'Win Rate %',
         'Total Rounds Played', 'Total Rounds Won', 'Total Rounds Lost', 'Round Win Rate %',
-        'Avg KAST %', 
-        'Avg ADR', 'Avg ADR Diff', 
-        'Avg Kills', 'Total Kills', 
-        'Avg Open Kills', 'Total Open Kills', 
-        'Avg Deaths', 'Total Deaths', 
-        'Avg Assists', 'Total Assists', 'Avg Damage', 'Total Damage',
-        'Avg Trade Kills', 'Total Trade Kills', 'Avg Rounds Won', 'Avg Rounds Lost',
-        'Avg Rating'
+        'Avg KAST %', 'Avg ADR', 'Avg ADR Diff', 
+        'Kills per Round', 'Total Kills', 
+        'Open Kills per Round', 'Total Open Kills', 
+        'Deaths per Round', 'Total Deaths', 
+        'Assists per Round', 'Total Assists', 'Total Damage',
+        'Trade Kills per Round', 'Total Trade Kills', 'Avg Rounds Won/Match', 'Avg Rounds Lost/Match',
+        'K/D Ratio', 'Avg Rating'
     ]
     st.dataframe(leaderboard[table_display_order], use_container_width=True, hide_index=True)
 
     st.markdown("---")
-    st.subheader("📈 All Performance Charts")
+    st.subheader("📈 All Performance Charts (In Core Order of Importance)")
     st.caption("*Error bars display standard deviation (consistency metric). Single match entries show no error bars.*")
 
-    # Complete metric chart deployment sequence arranged by exact weight of your specification
+    # Metrics sequence sorted perfectly per your layout logic guidelines
     metrics_to_chart = [
         ("Avg KAST %", "Std KAST %", "1. Round Contribution: Average KAST %"),
         ("Avg ADR", "Std ADR", "2. Firepower Output: Average Damage per Round (ADR)"),
-        ("Avg ADR Diff", "Std ADR Diff", "3. Net Round Impact: Average ADR Difference"),
-        ("Avg Kills", "Std Kills", "4. Kill Execution: Average Kills per Match"),
-        ("Avg Open Kills", "Std Open Kills", "5. Opening Duels: Average Open Kills"),
-        ("Avg Deaths", "Std Deaths", "6. Survival Deficit: Average Deaths per Match (Lower is Better)"),
-        ("K/D Ratio", None, "7. Combat Efficiency: Total Kill/Death Ratio"),
-        ("Win Rate %", None, "8. Match Success: Win Rate %"),
-        ("Round Win Rate %", None, "9. Map Control: Round Win Rate %"),
-        ("Avg Damage", "Std Damage", "10. Raw Chunk Output: Average Total Damage Dealt"),
-        ("Avg Assists", "Std Assists", "11. Team Playmaking: Average Assists per Match"),
-        ("Avg Trade Kills", "Std Trade Kills", "12. Support Retaliation: Average Trade Kills"),
-        ("Avg Rounds Won", "Std Rounds Won", "13. Round Capitalization: Average Rounds Won"),
-        ("Avg Rounds Lost", "Std Rounds Lost", "14. Economy Drain: Average Rounds Lost per Match"),
+        ("Kills per Round", "Std Kills per Round", "3. Frag Execution: Kills per Round"),
+        ("Open Kills per Round", "Std Open Kills per Round", "4. Opening Duels: Open Kills per Round"),
+        ("Deaths per Round", "Std Deaths per Round", "5. Survival Deficit: Deaths per Round (Lower is Better)"),
+        ("Avg ADR Diff", "Std ADR Diff", "6. Net Impact: Average ADR Difference"),
+        ("Assists per Round", "Std Assists per Round", "7. Team Playmaking: Assists per Round"),
+        ("Trade Kills per Round", "Std Trade Kills per Round", "8. Support Retaliation: Trade Kills per Round"),
+        ("K/D Ratio", None, "9. Kill/Death Efficiency Ratio"),
+        ("Win Rate %", None, "10. Match Success: Win Rate %"),
+        ("Round Win Rate %", None, "11. Map Control: Round Win Rate %"),
+        ("Total Damage", None, "12. Aggregate Chunk Output: Total Lifetime Damage Dealt"),
+        ("Total Kills", None, "13. Aggregate Frags: Total Lifetime Kills"),
+        ("Total Deaths", None, "14. Aggregate Losses: Total Lifetime Deaths (Lower is Better)"),
         ("Avg Rating", "Std Rating", "15. Ultimate Weighted Performance: HLTV Rating 2.1")
     ]
 
-    # Render layout inside cleanly split twin columns
+    # Render layout inside columns
     chart_cols = st.columns(2)
     
     for idx, (avg_col, std_col, chart_title) in enumerate(metrics_to_chart):
-        # Invert color scale and sorting arrays dynamically for lower-is-better data points
+        # Invert color scale and sorting configurations for deficit tracking parameters
         ascending_sort = True if "Deaths" in chart_title or "Rounds Lost" in chart_title else False
         sorted_chart_df = leaderboard.sort_values(by=avg_col, ascending=ascending_sort)
         
@@ -241,5 +256,4 @@ else:
         fig.update_traces(textposition='outside', texttemplate='%{text:.2s}')
         fig.update_layout(margin=dict(t=50, b=10, l=10, r=10))
         
-        # Deploy column splits
         chart_cols[idx % 2].plotly_chart(fig, use_container_width=True)
