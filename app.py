@@ -83,7 +83,6 @@ else:
 
     # Calculate Total Rounds played inside each individual match row
     df['Match Rounds'] = df['Rounds Won'] + df['Rounds Lost']
-    # Safely replace any 0 round glitches with NaN to prevent division by zero errors
     df['Match Rounds'] = df['Match Rounds'].replace(0, pd.NA)
 
     # Generate Per-Round Metrics for each match entry row
@@ -135,7 +134,7 @@ else:
     leaderboard['Round Win Rate %'] = ((leaderboard['Rounds Won_sum'] / leaderboard['Total Rounds Played']) * 100).round(1)
     leaderboard['K/D Ratio'] = (leaderboard['K_sum'] / leaderboard['D_sum']).round(2)
 
-    # Map internally to cleanly named layout columns
+    # Map internally to structured display columns
     final_column_mapping = {
         'Player': 'Player',
         'Match ID_count': 'Matches Played',
@@ -178,15 +177,14 @@ else:
     
     leaderboard = leaderboard.rename(columns=final_column_mapping)
 
-    # Standardize precision rounding formatting across fields
-    precision_1_cols = [
-        'Avg KAST %', 'Avg ADR', 'Avg ADR Diff', 'Round Win Rate %',
-        'Kills per Round', 'Open Kills per Round', 'Deaths per Round', 
-        'Assists per Round', 'Trade Kills per Round', 'Win Rate %'
-    ]
+    # Set rounding rules: 2 decimals for per-round values, 1 decimal for percentages/averages
+    precision_2_cols = ['Kills per Round', 'Open Kills per Round', 'Deaths per Round', 'Assists per Round', 'Trade Kills per Round', 'Avg Rating', 'K/D Ratio']
+    for col in precision_2_cols:
+        leaderboard[col] = leaderboard[col].round(2)
+        
+    precision_1_cols = ['Avg KAST %', 'Avg ADR', 'Avg ADR Diff', 'Round Win Rate %', 'Win Rate %', 'Avg Rounds Won/Match', 'Avg Rounds Lost/Match']
     for col in precision_1_cols:
         leaderboard[col] = leaderboard[col].round(1)
-    leaderboard['Avg Rating'] = leaderboard['Avg Rating'].round(2)
 
     # Sort master table precisely by your specified core performance weights
     leaderboard = leaderboard.sort_values(by=['Avg KAST %', 'Avg ADR', 'Kills per Round'], ascending=[False, False, False])
@@ -235,7 +233,6 @@ else:
     chart_cols = st.columns(2)
     
     for idx, (avg_col, std_col, chart_title) in enumerate(metrics_to_chart):
-        # Invert color scale and sorting configurations for deficit tracking parameters
         ascending_sort = True if "Deaths" in chart_title or "Rounds Lost" in chart_title else False
         sorted_chart_df = leaderboard.sort_values(by=avg_col, ascending=ascending_sort)
         
@@ -253,7 +250,21 @@ else:
             plot_config["error_y"] = std_col
             
         fig = px.bar(**plot_config)
-        fig.update_traces(textposition='outside', texttemplate='%{text:.2s}')
+        
+        # FIXING PLOTLY SI LABELS SYSTEM FORMATTING BUG
+        # Assign custom numeric formatting maps based on column categories
+        if avg_col in precision_2_cols:
+            text_template = '%{text:.2f}'
+            fig.update_layout(yaxis=dict(tickformat='.2f'))
+        elif avg_col in ['Total Damage', 'Total Kills', 'Total Deaths', 'Total Rounds Played', 'Total Rounds Won', 'Total Rounds Lost']:
+            text_template = '%{text:,}'
+            fig.update_layout(yaxis=dict(tickformat=','))
+        else:
+            text_template = '%{text:.1f}'
+            fig.update_layout(yaxis=dict(tickformat='.1f'))
+            
+        fig.update_traces(textposition='outside', texttemplate=text_template)
         fig.update_layout(margin=dict(t=50, b=10, l=10, r=10))
         
+        # Deploy column splits
         chart_cols[idx % 2].plotly_chart(fig, use_container_width=True)
