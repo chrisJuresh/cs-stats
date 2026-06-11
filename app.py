@@ -231,22 +231,27 @@ else:
         ("Total Kills", None, "13. Aggregate Frags: Total Lifetime Kills"),
         ("Total Deaths", None, "14. Aggregate Losses: Total Lifetime Deaths (Lower is Better)"),
         ("Avg Rating", "Std Rating", "15. Ultimate Weighted Performance: HLTV Rating 2.1"),
-        ("Overall Rank", None, "16. 🏆 Overall Ranking: Average Position Across All Metrics")
+        ("Matches Played", None, "16. Matches Played: Total Games Per Player"),
+        ("Overall Rank", None, "17. 🏆 Overall Ranking: Average Position Across All Metrics")
     ]
 
     # Render layout inside columns
     chart_cols = st.columns(2)
-    
+
     for idx, (avg_col, std_col, chart_title) in enumerate(metrics_to_chart):
-        if avg_col == "Overall Rank":
+        if avg_col == "Matches Played":
+            sorted_chart_df = leaderboard.sort_values(by=['Matches Played', 'Player'], ascending=[False, False])
+        elif avg_col == "Overall Rank":
             ascending_sort = True
             color_scale = 'Viridis'
+            sorted_chart_df = leaderboard.sort_values(by=avg_col, ascending=ascending_sort)
         else:
             ascending_sort = True if "Deaths" in chart_title or "Rounds Lost" in chart_title else False
             color_scale = 'Plasma' if ascending_sort else 'Viridis'
+            sorted_chart_df = leaderboard.sort_values(by=avg_col, ascending=ascending_sort)
 
-        sorted_chart_df = leaderboard.sort_values(by=avg_col, ascending=ascending_sort)
-
+        if avg_col == "Matches Played":
+            color_scale = 'Viridis'
         plot_config = {
             "data_frame": sorted_chart_df,
             "x": 'Player',
@@ -267,7 +272,7 @@ else:
         if avg_col == "Overall Rank" or avg_col in precision_2_cols:
             text_template = '%{text:.1f}'
             fig.update_layout(yaxis=dict(tickformat='.1f'))
-        elif avg_col in ['Total Damage', 'Total Kills', 'Total Deaths', 'Total Rounds Played', 'Total Rounds Won', 'Total Rounds Lost']:
+        elif avg_col in ['Total Damage', 'Total Kills', 'Total Deaths', 'Total Rounds Played', 'Total Rounds Won', 'Total Rounds Lost', 'Matches Played']:
             text_template = '%{text:,}'
             fig.update_layout(yaxis=dict(tickformat=','))
         else:
