@@ -12,42 +12,32 @@ st.markdown("---")
 
 def process_match_results(df):
     """
-    Infers Win/Loss, Rounds Won, and Rounds Lost by assigning 
-    the highest score to the team with the most total kills.
+    Directly reads the score string from the team's perspective.
+    Since the scores are flipped, the first number is ALWAYS this team's rounds.
     """
     rounds_won_list = []
     rounds_lost_list = []
     result_list = []
     
     for idx, row in df.iterrows():
-        match_id = row['Match ID']
-        team = row['Team']
         score_str = str(row['Match Score'])
         
-        match_df = df[df['Match ID'] == match_id]
-        team_kills = match_df.groupby('Team')['K'].sum()
-        
         try:
+            # Extract the numbers from the score (e.g., "13-7" -> [13, 7])
             scores = [int(x) for x in re.findall(r'\d+', score_str)]
             if len(scores) >= 2:
-                max_score = max(scores[0], scores[1])
-                min_score = min(scores[0], scores[1])
+                team_rounds = scores[0]
+                enemy_rounds = scores[1]
                 
-                if max_score == min_score:
-                    result_list.append('Draw')
-                    rounds_won_list.append(max_score)
-                    rounds_lost_list.append(max_score)
+                rounds_won_list.append(team_rounds)
+                rounds_lost_list.append(enemy_rounds)
+                
+                if team_rounds > enemy_rounds:
+                    result_list.append('Win')
+                elif team_rounds < enemy_rounds:
+                    result_list.append('Loss')
                 else:
-                    winning_team = team if team_kills.empty else team_kills.idxmax()
-                        
-                    if team == winning_team:
-                        result_list.append('Win')
-                        rounds_won_list.append(max_score)
-                        rounds_lost_list.append(min_score)
-                    else:
-                        result_list.append('Loss')
-                        rounds_won_list.append(min_score)
-                        rounds_lost_list.append(max_score)
+                    result_list.append('Draw')
             else:
                 result_list.append('Unknown')
                 rounds_won_list.append(0)
