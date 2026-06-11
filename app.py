@@ -179,17 +179,31 @@ else:
     # Sort master table precisely by your specified core performance weights
     leaderboard = leaderboard.sort_values(by=['Avg KAST %', 'Avg ADR', 'Kills per Round'], ascending=[False, False, False])
 
+    # Calculate overall ranking based on average position across all metrics
+    ranking_metrics = [
+        "Avg KAST %", "Avg ADR", "Kills per Round", "Open Kills per Round",
+        "Avg ADR Diff", "Assists per Round", "Trade Kills per Round", "K/D Ratio", "Avg Rating"
+    ]
+    lower_is_better = {"Deaths per Round"}
+
+    ranks = pd.DataFrame()
+    for metric in ranking_metrics:
+        ascending = metric in lower_is_better
+        ranks[f'{metric}_rank'] = leaderboard[metric].rank(ascending=ascending, method='min')
+
+    leaderboard['Overall Rank'] = ranks.mean(axis=1).round(1)
+
     # Display Master Metrics Data Grid Matrix
     st.subheader("📋 Complete Master Analytics Grid")
     st.write("Scroll horizontally to examine all metrics simultaneously.")
-    
+
     table_display_order = [
-        'Player', 'Matches Played', 'Games Won', 'Games Lost', 'Games Drawn', 'Win Rate %',
+        'Player', 'Overall Rank', 'Matches Played', 'Games Won', 'Games Lost', 'Games Drawn', 'Win Rate %',
         'Total Rounds Played', 'Total Rounds Won', 'Total Rounds Lost', 'Round Win Rate %',
-        'Avg KAST %', 'Avg ADR', 'Avg ADR Diff', 
-        'Kills per Round', 'Total Kills', 
-        'Open Kills per Round', 'Total Open Kills', 
-        'Deaths per Round', 'Total Deaths', 
+        'Avg KAST %', 'Avg ADR', 'Avg ADR Diff',
+        'Kills per Round', 'Total Kills',
+        'Open Kills per Round', 'Total Open Kills',
+        'Deaths per Round', 'Total Deaths',
         'Assists per Round', 'Total Assists', 'Total Damage',
         'Trade Kills per Round', 'Total Trade Kills', 'Avg Rounds Won/Match', 'Avg Rounds Lost/Match',
         'K/D Ratio', 'Avg Rating'
@@ -216,37 +230,47 @@ else:
         ("Total Damage", None, "12. Aggregate Chunk Output: Total Lifetime Damage Dealt"),
         ("Total Kills", None, "13. Aggregate Frags: Total Lifetime Kills"),
         ("Total Deaths", None, "14. Aggregate Losses: Total Lifetime Deaths (Lower is Better)"),
-        ("Avg Rating", "Std Rating", "15. Ultimate Weighted Performance: HLTV Rating 2.1")
+        ("Avg Rating", "Std Rating", "15. Ultimate Weighted Performance: HLTV Rating 2.1"),
+        ("Matches Played", None, "16. Matches Played: Total Games Per Player"),
+        ("Overall Rank", None, "17. 🏆 Overall Ranking: Average Position Across All Metrics")
     ]
 
     # Render layout inside columns
     chart_cols = st.columns(2)
-    
+
     for idx, (avg_col, std_col, chart_title) in enumerate(metrics_to_chart):
-        ascending_sort = True if "Deaths" in chart_title or "Rounds Lost" in chart_title else False
-        sorted_chart_df = leaderboard.sort_values(by=avg_col, ascending=ascending_sort)
-        
+        if avg_col == "Matches Played":
+            sorted_chart_df = leaderboard.sort_values(by=['Matches Played', 'Player'], ascending=[False, False])
+            color_scale = 'Viridis'
+        elif avg_col == "Overall Rank":
+            sorted_chart_df = leaderboard.sort_values(by=avg_col, ascending=True)
+            color_scale = 'Viridis'
+        else:
+            ascending_sort = True if "Deaths" in chart_title or "Rounds Lost" in chart_title else False
+            sorted_chart_df = leaderboard.sort_values(by=avg_col, ascending=ascending_sort)
+            color_scale = 'Viridis' if not ascending_sort else 'Plasma'
+
         plot_config = {
             "data_frame": sorted_chart_df,
             "x": 'Player',
             "y": avg_col,
             "text": avg_col,
             "color": avg_col,
-            "color_continuous_scale": 'Viridis' if not ascending_sort else 'Plasma',
+            "color_continuous_scale": color_scale,
             "title": chart_title
         }
-        
+
         if std_col:
             plot_config["error_y"] = std_col
-            
+
         fig = px.bar(**plot_config)
-        
+
         # FIXING PLOTLY SI LABELS SYSTEM FORMATTING BUG
         # Assign custom numeric formatting maps based on column categories
-        if avg_col in precision_2_cols:
-            text_template = '%{text:.2f}'
-            fig.update_layout(yaxis=dict(tickformat='.2f'))
-        elif avg_col in ['Total Damage', 'Total Kills', 'Total Deaths', 'Total Rounds Played', 'Total Rounds Won', 'Total Rounds Lost']:
+        if avg_col == "Overall Rank" or avg_col in precision_2_cols:
+            text_template = '%{text:.1f}'
+            fig.update_layout(yaxis=dict(tickformat='.1f'))
+        elif avg_col in ['Total Damage', 'Total Kills', 'Total Deaths', 'Total Rounds Played', 'Total Rounds Won', 'Total Rounds Lost', 'Matches Played']:
             text_template = '%{text:,}'
             fig.update_layout(yaxis=dict(tickformat=','))
         else:
