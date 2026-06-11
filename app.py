@@ -179,10 +179,24 @@ else:
     # Sort master table precisely by your specified core performance weights
     leaderboard = leaderboard.sort_values(by=['Avg KAST %', 'Avg ADR', 'Kills per Round'], ascending=[False, False, False])
 
+    # Calculate overall ranking based on average position across all metrics
+    ranking_metrics = [
+        "Avg KAST %", "Avg ADR", "Kills per Round", "Open Kills per Round",
+        "Avg ADR Diff", "Assists per Round", "Trade Kills per Round", "K/D Ratio", "Avg Rating"
+    ]
+    lower_is_better = {"Deaths per Round"}
+
+    ranks = pd.DataFrame()
+    for metric in ranking_metrics:
+        ascending = metric in lower_is_better
+        ranks[f'{metric}_rank'] = leaderboard[metric].rank(ascending=ascending, method='min')
+
+    leaderboard['Overall Rank'] = ranks.iloc[:, :].mean(axis=1).round(1)
+
     # Display Master Metrics Data Grid Matrix
     st.subheader("📋 Complete Master Analytics Grid")
     st.write("Scroll horizontally to examine all metrics simultaneously.")
-    
+
     table_display_order = [
         'Player', 'Overall Rank', 'Matches Played', 'Games Won', 'Games Lost', 'Games Drawn', 'Win Rate %',
         'Total Rounds Played', 'Total Rounds Won', 'Total Rounds Lost', 'Round Win Rate %',
@@ -199,20 +213,6 @@ else:
     st.markdown("---")
     st.subheader("📈 All Performance Charts (In Core Order of Importance)")
     st.caption("*Error bars display standard deviation (consistency metric). Single match entries show no error bars.*")
-
-    # Calculate overall ranking based on average position across all metrics
-    ranking_metrics = [
-        "Avg KAST %", "Avg ADR", "Kills per Round", "Open Kills per Round",
-        "Avg ADR Diff", "Assists per Round", "Trade Kills per Round", "K/D Ratio", "Avg Rating"
-    ]
-    lower_is_better = {"Deaths per Round"}
-
-    ranks = pd.DataFrame()
-    for metric in ranking_metrics:
-        ascending = metric in lower_is_better
-        ranks[f'{metric}_rank'] = leaderboard[metric].rank(ascending=ascending, method='min')
-
-    leaderboard['Overall Rank'] = ranks.iloc[:, :].mean(axis=1).round(1)
 
     # Metrics sequence sorted perfectly per your layout logic guidelines
     metrics_to_chart = [
