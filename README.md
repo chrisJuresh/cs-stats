@@ -1,113 +1,113 @@
-# 📊 cs-stats
+# cs-stats
 
-A CS2 team analytics tool that scrapes match data, processes it, and visualises player performance in an interactive Streamlit dashboard.
+**Scrape, consolidate, and visualise Counter-Strike 2 match stats for your friend group — from Scope.gg match pages to an interactive Streamlit leaderboard.**
 
-## Overview
+cs-stats settles the eternal friend-group argument about who is actually the best player, with data instead of vibes. A paste-in browser script exports both teams' stat tables from a match page to CSV, a small Python pipeline merges every export into one master dataset (resolving everyone's rotating gamer tags and alt accounts to a single identity along the way), and a Streamlit dashboard turns it all into a sortable leaderboard and 17 charts. The repo ships with real sample data — 225 player-match rows across 20 matches — so the dashboard works out of the box.
 
-`cs-stats` tracks and compares player performance across CS2 matches using stats exported from match pages. It aggregates per-round metrics, win rates, and HLTV ratings into a sortable leaderboard with interactive charts.
+<!-- screenshot: Streamlit dashboard showing the master analytics grid and the first pair of charts (Avg KAST % and Avg ADR with error bars) -->
+
+## How it works
+
+```mermaid
+flowchart LR
+    S["Scope.gg match page"] -- "scrape.js in DevTools console" --> C["match CSV download"]
+    C --> M["matches/"]
+    M -- "process.py (alias resolution)" --> D["master_stats.csv"]
+    A["add_scores.py (score-only matches)"] --> D
+    M -. "archived after import" .-> P["processed/"]
+    D -- "streamlit run app.py" --> V["Leaderboard + 17 Plotly charts"]
+```
+
+1. **Scrape** — open a finished match on Scope.gg, paste `scrape.js` into the browser DevTools console, and it downloads a CSV of both teams' per-player stats (K/D/A, damage, ADR, HLTV 2.1 rating, KAST %, opening and trade kills), with the match ID pulled from the URL and the score read from the page.
+2. **Ingest** — drop the CSVs into `matches/` and run `python process.py`. For every player name it hasn't seen before, it asks who that actually is and remembers the answer in `aliases.json` — so smurf accounts and novelty Unicode nicknames all roll up to one person. Rows are appended to `master_stats.csv` and the source file is archived to `processed/`.
+3. **Visualise** — `streamlit run app.py` renders a 29-column analytics grid plus 17 ranked bar charts.
+
+Matches with no detailed stats (e.g. nobody remembered to record them) can still be logged with `python add_scores.py`, which captures teams, rosters, and the final score. They count toward win/loss records and round totals without polluting anyone's stat averages.
 
 ## Features
 
-- **Browser scraper** — exports match stats directly from a CS2 stats page to CSV via a JavaScript bookmarklet
-- **Data processor** — merges exported CSVs into a master dataset with player alias resolution
-- **Manual entry** — add match scores and player names without a stats page
-- **Streamlit dashboard** — interactive leaderboard and 15 performance charts with standard deviation error bars
+- **One-paste match export** — no browser extension, no backend: `scrape.js` walks the match page's paired team/stat tables and triggers a client-side CSV download.
+- **Persistent identity resolution** — an interactive alias map (`aliases.json`) canonicalises volatile in-game names; at HEAD, 27 aliases map to 20 players.
+- **Per-round normalisation** — kills, deaths, assists, opening kills, and trade kills are divided by rounds played (parsed from each match's score string), so players with different match counts compare fairly.
+- **Consistency, not just averages** — charts show standard-deviation error bars, so a streaky 1.3-rating player looks different from a steady one.
+- **Composite Overall Rank** — each player's position averaged across nine core metrics (KAST %, ADR, kills/round, opening kills/round, ADR differential, assists/round, trade kills/round, K/D, HLTV 2.1 rating).
+- **Win/loss engine** — match results and round win rates are derived directly from score strings, from each team's own perspective.
+- **Score-only match support** — quick CLI entry for matches without scraped stats, with the score automatically flipped for the opposing team's rows.
 
-## Project Structure
+## Quick start
 
-```
-cs-stats/
-├── app.py              # Streamlit dashboard
-├── scrape.js           # Browser console script to export match stats to CSV
-├── process.py          # Merges match CSVs into master_stats.csv
-├── add_scores.py       # Manually add a match result (no stats page required)
-├── master_stats.csv    # Aggregated match data (generated)
-├── aliases.json        # Maps in-game usernames to real player names
-├── matches/            # Drop exported CSVs here before running process.py
-├── processed/          # Processed CSVs are moved here automatically
-└── requirements.txt    # Python dependencies
-```
-
-## Setup
-
-### Prerequisites
-
-- Python 3.9+
-- A modern web browser (for `scrape.js`)
-
-### Install dependencies
+Requires Python 3 and pip.
 
 ```bash
+git clone https://github.com/chrisJuresh/cs-stats.git
+cd cs-stats
 pip install -r requirements.txt
+streamlit run app.py
 ```
 
-## Usage
+The dashboard opens in your browser using the bundled `master_stats.csv`.
 
-### 1. Export match data from the browser
+## Adding your own matches
 
-Navigate to a CS2 match details page (e.g. on FACEIT or a supported stats site), open the browser console, paste the contents of `scrape.js`, and run it. A CSV file named `match_<id>_<tab>.csv` will be downloaded automatically.
+**Full stats (from Scope.gg):**
 
-### 2. Process exported CSVs
-
-Place the downloaded CSV(s) into the `matches/` folder, then run:
+1. Open the match details page and the stats tab you want to export.
+2. Paste the contents of `scrape.js` into the DevTools console and press Enter. A file named `match_<id>_<tab>.csv` downloads.
+3. Move the file(s) into `matches/` and run:
 
 ```bash
 python process.py
 ```
 
-For any new player username encountered, you will be prompted to enter their real name. Resolved aliases are saved to `aliases.json`. Processed files are moved to `processed/`.
+You'll be prompted once per unknown player name; press Enter to keep the name or type the person's real handle. Imported files are moved to `processed/` so they are never double-counted.
 
-### 3. Manually add a match (optional)
-
-If a stats page is unavailable, you can record a match result with player names only (no per-player stats):
+**Score only:**
 
 ```bash
 python add_scores.py
 ```
 
-You will be prompted for team names, the score, and player lists. Rows are appended to `master_stats.csv` with empty stat fields.
+Prompts for both team names, the final score, and comma-separated rosters, then appends the rows to `master_stats.csv`.
 
-### 4. Run the dashboard
+## What the dashboard shows
 
-```bash
-streamlit run app.py
-```
+- A master grid with 29 columns per player: matches, wins/losses/draws, win rate, round totals and round win rate, averages and totals for every combat stat, K/D ratio, HLTV 2.1 rating, and Overall Rank.
+- 17 bar charts in priority order — from KAST % and ADR down to lifetime totals, matches played, and the overall ranking — each colour-scaled, sorted in the direction that makes sense for the metric, and annotated with exact values.
 
-Open the URL shown in the terminal (default: `http://localhost:8501`).
+The key metrics, for the uninitiated:
 
-## Dashboard Metrics
-
-| Metric | Description |
+| Metric | Meaning |
 |---|---|
-| Avg KAST % | % of rounds with a Kill, Assist, Survived, or Traded |
-| Avg ADR | Average damage dealt per round |
-| Kills per Round | Normalised kill rate |
-| Open Kills per Round | First-blood rate per round |
-| Deaths per Round | Lower is better |
-| Avg ADR Diff | Net ADR advantage over opponents |
-| Assists per Round | Playmaking contribution |
-| Trade Kills per Round | Support/retaliation rate |
-| K/D Ratio | Kill/death efficiency |
-| Win Rate % | Match win percentage |
-| Round Win Rate % | Round win percentage |
-| Avg Rating | HLTV Rating 2.1 |
+| KAST % | Share of rounds with a **K**ill, **A**ssist, **S**urvival, or **T**rade |
+| ADR / ADR Diff | Average damage per round / net ADR advantage over opponents |
+| HLTV Rating 2.1 | The standard composite performance rating |
+| Open kills | First blood of the round |
+| Trade kills | Avenging a teammate's death within the trade window |
 
-Charts display standard deviation error bars where multiple matches exist.
-
-## Data Schema
-
-`master_stats.csv` columns:
+## Project structure
 
 ```
-Match ID, Match Score, Team, Player, K, D, A, Damage, ADR, ADR Differ..., HLTV Rating 2.1, KAST, %, Open kills, Trade kills
+app.py            Streamlit dashboard (aggregation, leaderboard, 17 charts)
+scrape.js         Browser-console exporter for Scope.gg match pages
+process.py        CSV ingestion + interactive player-alias resolution
+add_scores.py     CLI for logging score-only matches
+aliases.json      Persisted gamer-tag → player mapping
+master_stats.csv  Master dataset (one row per player per match)
+matches/          Drop new scraped CSVs here (created on first run)
+processed/        Archive of already-imported match CSVs
 ```
 
-Scores are stored from each team's perspective (e.g. Team A sees `13-7`, Team B sees `7-13`).
+## Tech stack
 
-## Dependencies
+Python with **pandas** (aggregation), **Streamlit** (UI), and **Plotly Express** (charts); the scraper is dependency-free vanilla JavaScript.
 
-| Package | Purpose |
-|---|---|
-| `streamlit` | Web dashboard |
-| `pandas` | Data processing |
-| `plotly` | Interactive charts |
+## Limitations
+
+- `scrape.js` targets Scope.gg's generated CSS class names, so a site redesign can break it — expect to update the selectors occasionally.
+- `master_stats.csv` now carries a `Team Outcome` column that raw scrape exports don't have; rows appended by `process.py` need that column accounted for (the dashboard itself recomputes outcomes from scores, so it never reads the column).
+- Dependencies in `requirements.txt` are unpinned.
+- This is a personal project built for one friend group's data; there is no hosted deployment and no test suite.
+
+## Status & credits
+
+Built as a weekend-style personal project (June 2026) and functional for its purpose; not under active development. The composite ranking and matches-played charts were contributed by [@Jeromesds0](https://github.com/Jeromesds0) via pull requests.
